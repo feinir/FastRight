@@ -37,7 +37,9 @@ enum FinderAction: String, CaseIterable {
         case .fileHash: return (strings("File Hash"), strings("Calculate and copy checksums for selected files"))
         case .copy: return (strings("Copy"), strings("Copy selected items to the Finder clipboard"))
         case .cut: return (strings("Cut"), strings("Move selected items when pasting with FastRight"))
-        case .paste: return (strings("Paste"), strings("Use Finder paste and handle name conflicts in Finder"))
+        case .paste:
+            let detail = StoreSandbox.isEnabled ? "Paste files and resolve name conflicts" : "Use Finder paste and handle name conflicts in Finder"
+            return (strings("Paste"), strings(detail))
         case .terminal: return (strings("Open in Terminal"), strings("Open folders in the terminal selected in General settings"))
         case .editFile: return (strings("Edit File"), strings("Open selected files in the text editor selected in General settings"))
         }
@@ -112,6 +114,7 @@ struct FinderMenuGroup: Codable, Equatable, Identifiable {
 struct FinderRequest: Codable {
     enum Action: String, Codable {
         case renameCreatedItem, goToDirectory, pasteFiles, startCutShortcut, addFavoriteDirectory, openPreferences
+        case scopedFileOperation
     }
 
     let action: Action
@@ -119,20 +122,24 @@ struct FinderRequest: Codable {
     var openAfterRename = false
     var applicationPath: String?
     var clipboardChangeCount: Int?
+    var fileOperation: ScopedFileOperation?
 
-    private static let directory = Settings.userHomeDirectory
-        .appendingPathComponent("Library/Application Support/FastRight/Finder Requests", isDirectory: true)
+    private static func directory() throws -> URL {
+        try StoreSandbox.dataDirectory().appendingPathComponent("Finder Requests", isDirectory: true)
+    }
 
     func writeRequest() throws -> URL {
-        try FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true,
+        let directory = try Self.directory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
-        let request = Self.directory.appendingPathComponent(UUID().uuidString + ".fastright-request")
+        let request = directory.appendingPathComponent(UUID().uuidString + ".fastright-request")
         try JSONEncoder().encode(self).write(to: request, options: .atomic)
         return request
     }
 
     static func takeRequest(at url: URL) -> Self? {
         guard url.isFileURL, url.pathExtension == "fastright-request",
+              let directory = try? directory(),
               url.deletingLastPathComponent().standardizedFileURL.path == directory.standardizedFileURL.path,
               UUID(uuidString: url.deletingPathExtension().lastPathComponent) != nil,
               let data = try? Data(contentsOf: url) else { return nil }
@@ -160,7 +167,7 @@ enum FinderClipboard {
     }
 
     @discardableResult
-    static func writeFiles(_ urls: [URL], cut: Bool) -> Bool {
+    static func writeFiles(_ urls: [URL], cut: Bool, to clipboard: NSPasteboard = .general) -> Bool {
         guard !urls.isEmpty, urls.allSatisfy(\.isFileURL) else { return false }
         var items: [NSPasteboardItem] = []
         for url in urls {
@@ -169,7 +176,6 @@ enum FinderClipboard {
             if cut && items.isEmpty && !item.setString("move", forType: cutType) { return false }
             items.append(item)
         }
-        let clipboard = NSPasteboard.general
         clipboard.clearContents()
         return clipboard.writeObjects(items)
     }
@@ -179,6 +185,7 @@ struct FileTemplate: Codable, Equatable, Identifiable {
     var id = UUID()
     var name: String
     var sourcePath: String?
+    var sourceBookmark: Data?
     var textContent: String?
     var applicationPath: String?
     var topLevel = false
@@ -469,9 +476,12 @@ final class InstalledApplications {
 }
 
 struct Settings: Codable, Equatable {
-    static let didSaveNotification = Notification.Name("com.ynpe.fastright.settingsDidSave")
+    static let didSaveNotification = Notification.Name(
+        (StoreSandbox.applicationGroup ?? "com.ynpe.fastright") + ".settingsDidSave"
+    )
     var language = AppLanguage.system
     var strings: AppStrings { AppStrings(language: language) }
+    var authorizedFolders: [AuthorizedFolder] = []
     var externalVolumes = false
     var enabledActions = Set(FinderAction.allCases.map(\.rawValue))
     var copyNameExtensions = false
@@ -532,6 +542,7 @@ struct Settings: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case language
+        case authorizedFolders = "authorized_folders"
         case externalVolumes = "external_volumes"
         case enabledActions = "enabled_actions"
         case copyNameExtensions = "copy_name_extensions"
@@ -567,6 +578,7 @@ struct Settings: Codable, Equatable {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         language = try values.decodeIfPresent(String.self, forKey: .language)
             .flatMap(AppLanguage.init(rawValue:)) ?? .system
+        authorizedFolders = try values.decodeIfPresent([AuthorizedFolder].self, forKey: .authorizedFolders) ?? []
         externalVolumes = try values.decodeIfPresent(Bool.self, forKey: .externalVolumes) ?? externalVolumes
         let savedActions = try values.decodeIfPresent(Set<String>.self, forKey: .enabledActions)
         enabledActions = savedActions ?? enabledActions
@@ -662,23 +674,23 @@ struct Settings: Codable, Equatable {
         }
     }
 
-    fileprivate static let userHomeDirectory: URL = {
+    static let userHomeDirectory: URL = {
         // Finder Sync's Foundation home directory can point inside its sandbox.
         if let directory = getpwuid(getuid())?.pointee.pw_dir {
             return URL(fileURLWithPath: String(cString: directory), isDirectory: true)
         }
         return FileManager.default.homeDirectoryForCurrentUser
     }()
-    private static let fileURL = userHomeDirectory.appendingPathComponent("Library/Application Support/FastRight/settings.json")
-
     static var desktopDirectory: URL {
-        FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+        if StoreSandbox.isEnabled { return userHomeDirectory.appendingPathComponent("Desktop", isDirectory: true) }
+        return FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
             ?? userHomeDirectory.appendingPathComponent("Desktop", isDirectory: true)
     }
 
-    static func load(from url: URL = fileURL, initializeIfMissing: Bool = false) throws -> Settings {
+    static func load(from url: URL? = nil, initializeIfMissing: Bool = false) throws -> Settings {
+        let file = try url ?? StoreSandbox.dataDirectory().appendingPathComponent("settings.json")
         do {
-            return try JSONDecoder().decode(Settings.self, from: Data(contentsOf: url))
+            return try JSONDecoder().decode(Settings.self, from: Data(contentsOf: file))
         } catch CocoaError.fileReadNoSuchFile {
             let defaults = Settings()
             if initializeIfMissing { try defaults.save(to: url) }
@@ -687,7 +699,7 @@ struct Settings: Codable, Equatable {
     }
 
     @discardableResult
-    static func saveAddingFavoriteDirectories(_ directories: [URL], to url: URL = fileURL) throws -> Settings {
+    static func saveAddingFavoriteDirectories(_ directories: [URL], to url: URL? = nil) throws -> Settings {
         var settings = try load(from: url)
         let updated = FavoriteDirectory.adding(directories, to: settings.favoriteDirectories)
         if updated != settings.favoriteDirectories {
@@ -697,12 +709,13 @@ struct Settings: Codable, Equatable {
         return settings
     }
 
-    func save(to url: URL = fileURL) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    func save(to url: URL? = nil) throws {
+        let file = try url ?? StoreSandbox.dataDirectory().appendingPathComponent("settings.json")
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(self).write(to: url, options: .atomic)
-        if url == Self.fileURL {
+        try encoder.encode(self).write(to: file, options: .atomic)
+        if url == nil {
             DistributedNotificationCenter.default().postNotificationName(Self.didSaveNotification, object: nil,
                                                                           deliverImmediately: true)
         }

@@ -1,4 +1,4 @@
-.PHONY: build release
+.PHONY: build release app-store
 build:
 	./build.sh
 	# Craft Anything looks for packaged apps in Build/.
@@ -6,3 +6,6 @@ build:
 
 release:
 	./release.sh
+
+app-store:
+	./build-app-store.sh package

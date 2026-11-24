@@ -150,11 +150,19 @@ enum FileActions {
         guard let path = template.sourcePath else {
             return try create(template.name, in: folder, contents: Data((template.textContent ?? "").utf8))
         }
+        let source: URL
+        if let bookmark = template.sourceBookmark {
+            source = try StoreSandbox.resolve(bookmark)
+            guard source.startAccessingSecurityScopedResource() else { throw CocoaError(.fileReadNoPermission) }
+        } else {
+            source = URL(fileURLWithPath: path)
+        }
+        defer { if template.sourceBookmark != nil { source.stopAccessingSecurityScopedResource() } }
         let target = try uniqueURL(in: folder, name: template.name)
         let staging = try stagingFolder(in: folder)
         defer { try? manager.removeItem(at: staging) }
         let copy = staging.appendingPathComponent("template")
-        try manager.copyItem(at: URL(fileURLWithPath: path), to: copy)
+        try manager.copyItem(at: source, to: copy)
         try manager.moveItem(at: copy, to: target)
         return target
     }
@@ -164,6 +172,14 @@ enum FileActions {
         try manager.createDirectory(at: staging, withIntermediateDirectories: false,
                                     attributes: [.posixPermissions: 0o700])
         return staging
+    }
+}
+
+extension FinderClipboard {
+    static func writeText(_ text: String) throws {
+        let clipboard = NSPasteboard.general
+        clipboard.clearContents()
+        guard clipboard.setString(text, forType: .string) else { throw FileActionError.writeFailed }
     }
 }
 
@@ -272,14 +288,15 @@ final class FastRightMenu: NSObject {
         prepareApplications(for: settings)
         let selectedItems = selection.filter { $0.standardizedFileURL.path != "/" }
         let items = selectedItems.isEmpty ? [target] : selectedItems
-        if !isMenuBar {
+        if !isMenuBar && !StoreSandbox.isEnabled {
             let mountRoots = FinderScope.visibleMountRoots()
             let allowed: (URL) -> Bool = {
                 FinderScope.allows($0, externalVolumes: settings.externalVolumes, visibleMountRoots: mountRoots)
             }
             guard allowed(target), items.allSatisfy(allowed) else { return nil }
         }
-        let folder = menu == .contextualMenuForContainer ? target : FileActions.destinationFolder(for: items[0])
+        let inContainer = menu == .contextualMenuForContainer
+        let folder = inContainer ? target : FileActions.destinationFolder(for: items[0])
         let strings = settings.strings
         var actions: [FinderAction: NSMenuItem] = [:]
         var topLevelTemplates: [NSMenuItem] = []
@@ -325,6 +342,11 @@ final class FastRightMenu: NSObject {
                 let basename = (template.name as NSString).deletingPathExtension
                 let title = settings.hideTemplateExtensions && !basename.isEmpty ? basename : template.name
                 let item = command(title) { extensionInstance in
+                    if StoreSandbox.isEnabled {
+                        try extensionInstance.requestScopedOperation(.createFile(templateID: saved.id, inContainer: inContainer),
+                                                                     at: items[0])
+                        return
+                    }
                     let url = try FileActions.create(from: template, in: folder)
                     extensionInstance.renameCreatedItem(url, openAfterRename: settings.openCreatedFiles,
                                                         applicationPath: template.applicationPath)
@@ -345,7 +367,7 @@ final class FastRightMenu: NSObject {
             for app in favorites {
                 guard let entry = applicationAssets?.entries[app.id], entry.favorite.path == app.path,
                       entry.favorite.presetBundleIdentifier == app.presetBundleIdentifier else { continue }
-                let item = command(app.displayName(in: strings)) { $0.open(items: items, application: entry.url) }
+                let item = command(app.displayName(in: strings)) { try $0.open(items: items, application: entry.url) }
                 let isTopLevel = app.topLevel && pinApplications
                 if isTopLevel ? settings.showMainMenuIcons : settings.showSubmenuIcons {
                     item.image = entry.icon ?? icons.image("app", colorful: settings.colorfulIcons)
@@ -358,9 +380,9 @@ final class FastRightMenu: NSObject {
         if isEnabled(.favoriteDirectories) {
             var directories = settings.favoriteDirectories.filter(\.enabled).map { directory -> NSMenuItem in
                 let item: NSMenuItem
-                if directory.isAvailable {
+                if StoreSandbox.isEnabled || directory.isAvailable {
                     item = command(directory.displayName(in: strings)) { extensionInstance in
-                        guard directory.isAvailable else { throw FileActionError.directoryUnavailable }
+                        guard StoreSandbox.isEnabled || directory.isAvailable else { throw FileActionError.directoryUnavailable }
                         try extensionInstance.sendRequest(FinderRequest(action: .goToDirectory, path: directory.path)) { error in
                             extensionInstance.showError(error.localizedDescription)
                         }
@@ -380,9 +402,9 @@ final class FastRightMenu: NSObject {
             }
             let addTitle = strings("Add to Favorite Folders")
             let addDirectory: NSMenuItem
-            if target.isFileURL, !alreadySaved, isMenuBar || targetDirectory.isAvailable {
+            if target.isFileURL, !alreadySaved, isMenuBar || StoreSandbox.isEnabled || targetDirectory.isAvailable {
                 addDirectory = command(addTitle) { extensionInstance in
-                    guard targetDirectory.isAvailable else { throw FileActionError.directoryUnavailable }
+                    guard StoreSandbox.isEnabled || targetDirectory.isAvailable else { throw FileActionError.directoryUnavailable }
                     try extensionInstance.sendRequest(FinderRequest(action: .addFavoriteDirectory, path: targetDirectory.path)) { error in
                         extensionInstance.showError(error.localizedDescription)
                     }
@@ -399,30 +421,34 @@ final class FastRightMenu: NSObject {
             addCollection(.favoriteDirectories, items: directories)
         }
         add(.folder) {
+            if StoreSandbox.isEnabled {
+                try $0.requestScopedOperation(.createFolder(inContainer: inContainer), at: items[0])
+                return
+            }
             let url = try FileActions.create(strings("Untitled"), in: folder, directory: true)
             $0.renameCreatedItem(url)
         }
-        add(.path) {
-            try $0.copyText(FileActions.clipboardText(for: items, namesOnly: false))
+        add(.path) { _ in
+            try FinderClipboard.writeText(FileActions.clipboardText(for: items, namesOnly: false))
         }
-        add(.name) {
-            try $0.copyText(FileActions.clipboardText(
+        add(.name) { _ in
+            try FinderClipboard.writeText(FileActions.clipboardText(
                 for: items, namesOnly: true, includeExtensions: settings.copyNameExtensions
             ))
         }
-        if isEnabled(.fileHash), menu == .contextualMenuForItems, items.allSatisfy(FileHash.canHash) {
+        let regularFiles = menu == .contextualMenuForItems && items.allSatisfy { item in
+            StoreSandbox.isEnabled ? !item.hasDirectoryPath : FileHash.canHash(item)
+        }
+        if isEnabled(.fileHash), regularFiles {
             addCollection(.fileHash, items: FileHash.allCases.map { algorithm in
-                command(strings("Copy %@", algorithm.rawValue)) { $0.copyHashes(algorithm, for: items) }
+                command(strings("Copy %@", algorithm.rawValue)) { try $0.copyHashes(algorithm, for: items) }
             })
         }
-        let editableFiles = menu == .contextualMenuForItems && items.allSatisfy { item in
-            (try? item.resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
-        }
-        add(.editFile, available: editableFiles) {
+        add(.editFile, available: regularFiles) {
             guard let application = InstalledApplications().url(for: settings.textEditor.rawValue) else {
                 throw FileActionError.editorNotInstalled(settings.textEditor)
             }
-            $0.open(items: items, application: application)
+            try $0.open(items: items, application: application)
         }
         let canTransferSelection = menu != .contextualMenuForContainer && !items.contains(where: FinderScope.isVolumeRoot)
         add(.copy, available: canTransferSelection) { try $0.copyItems(items, cut: false) }
@@ -433,7 +459,7 @@ final class FastRightMenu: NSObject {
             guard let application = InstalledApplications().url(for: choice.bundleIdentifier) else {
                 throw FileActionError.terminalNotInstalled(choice)
             }
-            $0.open(items: [folder], application: application)
+            try $0.open(items: [folder], application: application)
         }
         let preferences = command(strings("FastRight Settings")) { try $0.openPreferences() }
         let result = FinderMenuLayout.make(settings: settings, icons: icons, actions: actions, preferences: preferences,
@@ -466,25 +492,29 @@ final class FastRightMenu: NSObject {
         }
     }
 
-    private func copyText(_ text: String) throws {
-        let clipboard = NSPasteboard.general
-        clipboard.clearContents()
-        guard clipboard.setString(text, forType: .string) else {
-            throw FileActionError.writeFailed
-        }
+    private func requestScopedOperation(_ operation: ScopedFileOperation, at url: URL,
+                                        clipboardChangeCount: Int? = nil) throws {
+        let request = FinderRequest(action: .scopedFileOperation, path: url.path,
+                                    clipboardChangeCount: clipboardChangeCount, fileOperation: operation)
+        try sendRequest(request) { error in self.showError(error.localizedDescription) }
     }
 
-    private func copyHashes(_ algorithm: FileHash, for items: [URL]) {
+    private func copyHashes(_ algorithm: FileHash, for items: [URL]) throws {
+        let changeCount = NSPasteboard.general.changeCount
+        if StoreSandbox.isEnabled, let first = items.first {
+            try requestScopedOperation(.copyHash(algorithm: algorithm.rawValue, items: items), at: first,
+                                       clipboardChangeCount: changeCount)
+            return
+        }
         let request = UUID()
         hashRequestID = request
-        let changeCount = NSPasteboard.general.changeCount
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result { try algorithm.clipboardText(for: items) }
             DispatchQueue.main.async {
                 guard self.hashRequestID == request else { return }
                 do {
                     let text = try result.get()
-                    if NSPasteboard.general.changeCount == changeCount { try self.copyText(text) }
+                    if NSPasteboard.general.changeCount == changeCount { try FinderClipboard.writeText(text) }
                 } catch {
                     self.showError(error.localizedDescription)
                 }
@@ -505,7 +535,11 @@ final class FastRightMenu: NSObject {
         }
     }
 
-    private func open(items: [URL], application: URL) {
+    private func open(items: [URL], application: URL) throws {
+        if StoreSandbox.isEnabled, let first = items.first {
+            try requestScopedOperation(.open(items: items, application: application), at: first)
+            return
+        }
         NSWorkspace.shared.open(items, withApplicationAt: application, configuration: .init()) { _, error in
             guard let error else { return }
             DispatchQueue.main.async { self.showError(error.localizedDescription) }

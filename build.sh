@@ -50,21 +50,22 @@ done
 
 swift_target=arm64-apple-macos13.0
 /usr/bin/xcrun swiftc -target "$swift_target" -O -module-name FastRight -module-cache-path "$module_cache" \
-    macos/FastRight.swift macos/Settings.swift macos/Localization.swift macos/CollectionSettings.swift macos/SettingsDrag.swift \
-    macos/CreatedItemRename.swift macos/FinderAutomation.swift macos/FinderCutShortcut.swift macos/FastRightStatusItem.swift \
+    macos/FastRight.swift macos/Settings.swift macos/Localization.swift macos/StoreSandbox.swift macos/CollectionSettings.swift macos/SettingsDrag.swift \
+    macos/CreatedItemRename.swift macos/FinderAutomation.swift macos/FinderCutShortcut.swift macos/FastRightStatusItem.swift macos/StorePaste.swift \
     macos/FinderMenu.swift macos/FinderMenuIcons.swift macos/FileHash.swift \
     -o "$bundle/Contents/MacOS/fastright"
 
 /usr/bin/xcrun swiftc -target "$swift_target" -O -module-name FastRightFinder -module-cache-path "$module_cache" \
     -Xlinker -e -Xlinker _NSExtensionMain macos/FinderExtension.swift macos/FinderMenu.swift macos/FinderMenuIcons.swift \
-    macos/Settings.swift macos/Localization.swift macos/FileHash.swift \
+    macos/Settings.swift macos/Localization.swift macos/StoreSandbox.swift macos/FileHash.swift \
     -o "$extension/Contents/MacOS/FastRightFinder"
 
 /usr/bin/xcrun swift -module-cache-path "$module_cache" macos/AppIcon.swift \
     "$bundle/Contents/Resources/FastRight.icns"
 
 /usr/bin/xcrun swiftc -O -module-cache-path "$module_cache" \
-    macos/BuildFinderMenuIcons.swift macos/FinderMenuIcons.swift macos/Settings.swift macos/Localization.swift -o "$stage/build-menu-icons"
+    macos/BuildFinderMenuIcons.swift macos/FinderMenuIcons.swift macos/Settings.swift macos/Localization.swift \
+    macos/StoreSandbox.swift -o "$stage/build-menu-icons"
 "$stage/build-menu-icons" "$extension/Contents/Resources/FinderMenuIcons.archive"
 
 /usr/bin/codesign "${sign_args[@]}" --entitlements macos/Finder.entitlements "$extension"

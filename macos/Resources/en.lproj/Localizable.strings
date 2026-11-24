@@ -165,3 +165,16 @@
 "Use Finder paste and handle name conflicts in Finder" = "Use Finder paste and handle name conflicts in Finder";
 "WeChat" = "WeChat";
 "Window" = "Window";
+"Choose the folders where FastRight can work with files." = "Choose the folders where FastRight can work with files.";
+"FastRight could not open the shared settings container." = "FastRight could not open the shared settings container.";
+"Folder Access" = "Folder Access";
+"Grant access to this folder in FastRight’s General settings and try again." = "Grant access to this folder in FastRight’s General settings and try again.";
+"Grant Folder Access" = "Grant Folder Access";
+"A folder cannot be transferred into itself or replace a folder that contains it." = "A folder cannot be transferred into itself or replace a folder that contains it.";
+"An item named %@ already exists." = "An item named %@ already exists.";
+"FastRight is already pasting files." = "FastRight is already pasting files.";
+"Keep Both" = "Keep Both";
+"Paste files and resolve name conflicts" = "Paste files and resolve name conflicts";
+"Replace" = "Replace";
+"Replace the existing item or keep both items." = "Replace the existing item or keep both items.";
+"The original item could not be restored. It is still available at %@." = "The original item could not be restored. It is still available at %@.";

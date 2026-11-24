@@ -424,7 +424,10 @@ private struct FileTemplateEditor: View {
                 Text(template.sourcePath ?? strings("Enter text")).lineLimit(1).truncationMode(.middle)
                 Spacer()
                 if template.sourcePath != nil {
-                    Button(strings("Enter text")) { draft.value.sourcePath = nil }
+                    Button(strings("Enter text")) {
+                        draft.value.sourcePath = nil
+                        draft.value.sourceBookmark = nil
+                    }
                 }
                 Button(strings("Choose Template File"), action: selectSource)
             }
@@ -470,6 +473,15 @@ private struct FileTemplateEditor: View {
         let panel = NSOpenPanel()
         panel.prompt = strings("Choose")
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        if StoreSandbox.isEnabled {
+            defer { url.stopAccessingSecurityScopedResource() }
+            do {
+                draft.value.sourceBookmark = try url.bookmarkData(options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess])
+            } catch {
+                NSAlert(error: error).runModal()
+                return
+            }
+        }
         draft.value.name = url.lastPathComponent
         draft.value.sourcePath = url.path
     }

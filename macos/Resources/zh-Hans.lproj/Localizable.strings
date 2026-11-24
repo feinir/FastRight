@@ -165,3 +165,16 @@
 "Use Finder paste and handle name conflicts in Finder" = "使用访达粘贴，遇到同名项目时由访达处理";
 "WeChat" = "微信";
 "Window" = "窗口";
+"Choose the folders where FastRight can work with files." = "选择允许 FastRight 操作文件的目录。";
+"FastRight could not open the shared settings container." = "FastRight 无法打开共享设置容器。";
+"Folder Access" = "目录授权";
+"Grant access to this folder in FastRight’s General settings and try again." = "请在 FastRight 的通用偏好中授权访问此目录，再重试。";
+"Grant Folder Access" = "授权目录";
+"A folder cannot be transferred into itself or replace a folder that contains it." = "不能将文件夹传输到它自己的内部，或覆盖包含它的文件夹。";
+"An item named %@ already exists." = "已存在名为「%@」的项目。";
+"FastRight is already pasting files." = "FastRight 正在粘贴文件。";
+"Keep Both" = "保留两者";
+"Paste files and resolve name conflicts" = "粘贴文件并处理同名冲突";
+"Replace" = "覆盖";
+"Replace the existing item or keep both items." = "可以覆盖现有项目，或保留两个项目。";
+"The original item could not be restored. It is still available at %@." = "未能恢复原项目，仍可在 %@ 找到它。";

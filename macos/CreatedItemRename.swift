@@ -18,7 +18,7 @@ struct CreatedItemRename {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         let reference = openAfterRename ? (url as NSURL).fileReferenceURL() : nil
         NSWorkspace.shared.activateFileViewerSelecting([url])
-        let finder = FinderAutomation.isAuthorized ? await beginFinderRename() : nil
+        let finder = !StoreSandbox.isEnabled && FinderAutomation.isAuthorized ? await beginFinderRename() : nil
         if let reference, !Task.isCancelled {
             await openWhenNamingFinishes(reference: reference, finder: finder)
         }

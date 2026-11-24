@@ -10,7 +10,7 @@ private struct PermissionStatus: Equatable {
 
     @MainActor static func check() -> Self {
         Self(finderExtension: FIFinderSyncController.isExtensionEnabled,
-             finderAutomation: FinderAutomation.isAuthorized,
+             finderAutomation: !StoreSandbox.isEnabled && FinderAutomation.isAuthorized,
              directDirectoryNavigation: FinderAutomation.canChangeDirectory)
     }
 }
@@ -73,6 +73,30 @@ private final class SettingsModel: ObservableObject {
     func addFavoriteDirectories(_ directories: [URL]) throws {
         settings = try Settings.saveAddingFavoriteDirectories(directories)
         errorMessage = ""
+    }
+
+    func chooseAuthorizedFolders() {
+        let panel = NSOpenPanel()
+        panel.prompt = settings.strings("Grant Folder Access")
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        defer { panel.urls.forEach { $0.stopAccessingSecurityScopedResource() } }
+        do {
+            let grants = try panel.urls.map(AuthorizedFolder.init(selectedURL:))
+            update { settings in
+                for grant in grants {
+                    if let index = settings.authorizedFolders.firstIndex(where: { $0.id == grant.id }) {
+                        settings.authorizedFolders[index] = grant
+                    } else {
+                        settings.authorizedFolders.append(grant)
+                    }
+                }
+            }
+        } catch {
+            errorMessage = settings.strings("Could not save settings: %@", error.localizedDescription)
+        }
     }
 }
 
@@ -466,14 +490,34 @@ private struct SettingsView: View {
                                   readyLabel: "On", missingLabel: "Disabled", button: strings("Open Extension Settings")) {
                         FIFinderSyncController.showExtensionManagementInterface()
                     }
-                    permissionRow(strings("Accessibility"), detail: strings("Use ⌘X to cut, paste files, and rename new items in Finder"),
-                                  ready: model.permissions.finderAutomation, button: strings("Grant Accessibility Access")) {
-                        FinderAutomation.requestAccess()
+                    if !StoreSandbox.isEnabled {
+                        permissionRow(strings("Accessibility"), detail: strings("Use ⌘X to cut, paste files, and rename new items in Finder"),
+                                      ready: model.permissions.finderAutomation, button: strings("Grant Accessibility Access")) {
+                            FinderAutomation.requestAccess()
+                        }
                     }
                     permissionRow(strings("Finder Automation"), detail: strings("Open favorite folders in the current Finder window"),
                                   ready: model.permissions.directDirectoryNavigation, button: strings("Allow Finder Control")) {
                         FinderAutomation.requestNavigationAccess()
                         model.refreshPermissions()
+                    }
+                }
+                if StoreSandbox.isEnabled {
+                    Section(strings("Folder Access")) {
+                        ForEach(model.settings.authorizedFolders) { folder in
+                            LabeledContent {
+                                Button(strings("Remove")) {
+                                    model.update { $0.authorizedFolders.removeAll { $0.id == folder.id } }
+                                }
+                            } label: {
+                                Text(folder.path).lineLimit(2).truncationMode(.middle)
+                            }
+                        }
+                        LabeledContent {
+                            Button(strings("Grant Folder Access"), action: model.chooseAuthorizedFolders)
+                        } label: {
+                            Text(strings("Choose the folders where FastRight can work with files."))
+                        }
                     }
                 }
                 Section(strings("Context Menu")) {
@@ -704,7 +748,7 @@ private final class FastRightApplication: NSObject, NSApplicationDelegate, NSWin
         launched = true
         if screenshotURL == nil {
             installMainMenu(strings: .current)
-            cutShortcut.start()
+            if !StoreSandbox.isEnabled { cutShortcut.start() }
             statusItem.start()
         }
         if launchedForFinder {
@@ -753,6 +797,10 @@ private final class FastRightApplication: NSObject, NSApplicationDelegate, NSWin
     }
 
     private func saveFavoriteDirectories(_ directories: [URL]) throws {
+        let access = try StoreSandbox.isEnabled
+            ? StoreSandbox.startAccess(to: directories, folders: Settings.load().authorizedFolders)
+            : []
+        defer { access.forEach { $0.stopAccessingSecurityScopedResource() } }
         if let settingsModel { try settingsModel.addFavoriteDirectories(directories) }
         else { try Settings.saveAddingFavoriteDirectories(directories) }
     }
@@ -762,17 +810,32 @@ private final class FastRightApplication: NSObject, NSApplicationDelegate, NSWin
         finderTask?.cancel()
         finderTask = Task { [weak self] in
             do {
+                let needsFolder = request.action == .goToDirectory || request.action == .renameCreatedItem
+                let access = try StoreSandbox.isEnabled && needsFolder
+                    ? StoreSandbox.startAccess(to: [URL(fileURLWithPath: request.path)],
+                                               folders: Settings.load().authorizedFolders)
+                    : []
+                defer { access.forEach { $0.stopAccessingSecurityScopedResource() } }
                 switch request.action {
                 case .renameCreatedItem:
                     await CreatedItemRename(action: request).perform()
                 case .goToDirectory:
                     let directory = URL(fileURLWithPath: request.path, isDirectory: true)
-                    if fromMenuBar { try await FinderAutomation.openFavoriteFromMenuBar(directory) }
+                    if fromMenuBar && StoreSandbox.isEnabled {
+                        try await FinderAutomation.activateFinder()
+                        try FinderAutomation.goToDirectory(directory)
+                    } else if fromMenuBar { try await FinderAutomation.openFavoriteFromMenuBar(directory) }
                     else { try FinderAutomation.goToDirectory(directory) }
                 case .pasteFiles:
-                    if fromMenuBar, FinderAutomation.isAuthorized { try await FinderAutomation.activateFinder() }
-                    try await FinderAutomation.pasteFiles(into: URL(fileURLWithPath: request.path, isDirectory: true),
-                                                          clipboardChangeCount: request.clipboardChangeCount)
+                    let folder = URL(fileURLWithPath: request.path, isDirectory: true)
+                    if StoreSandbox.isEnabled {
+                        try await StorePaste.perform(into: folder, expectedChangeCount: request.clipboardChangeCount)
+                    } else {
+                        if fromMenuBar, FinderAutomation.isAuthorized { try await FinderAutomation.activateFinder() }
+                        try await FinderAutomation.pasteFiles(into: folder, clipboardChangeCount: request.clipboardChangeCount)
+                    }
+                case .scopedFileOperation:
+                    try await self?.performScopedFileOperation(request)
                 case .startCutShortcut, .addFavoriteDirectory, .openPreferences:
                     break
                 }
@@ -784,6 +847,49 @@ private final class FastRightApplication: NSObject, NSApplicationDelegate, NSWin
             }
             guard let self, !Task.isCancelled else { return }
             self.finderTask = nil
+        }
+    }
+
+    private func performScopedFileOperation(_ request: FinderRequest) async throws {
+        guard StoreSandbox.isEnabled, let operation = request.fileOperation else { throw FileActionError.unavailableMenuAction }
+        let settings = try Settings.load()
+        let target = URL(fileURLWithPath: request.path)
+
+        switch operation {
+        case .createFolder(let inContainer):
+            let access = try StoreSandbox.startAccess(to: [target], folders: settings.authorizedFolders)
+            defer { access.forEach { $0.stopAccessingSecurityScopedResource() } }
+            let folder = inContainer ? target : FileActions.destinationFolder(for: target)
+            let created = try FileActions.create(settings.strings("Untitled"), in: folder, directory: true)
+            await CreatedItemRename(action: FinderRequest(action: .renameCreatedItem, path: created.path)).perform()
+
+        case .createFile(let templateID, let inContainer):
+            guard let saved = settings.fileTemplates.first(where: { $0.id == templateID && $0.enabled })
+            else { throw FileActionError.invalidTemplateName }
+            let access = try StoreSandbox.startAccess(to: [target], folders: settings.authorizedFolders)
+            defer { access.forEach { $0.stopAccessingSecurityScopedResource() } }
+            let folder = inContainer ? target : FileActions.destinationFolder(for: target)
+            let created = try FileActions.create(from: saved.localized(in: settings.strings), in: folder)
+            await CreatedItemRename(action: FinderRequest(action: .renameCreatedItem, path: created.path,
+                                                           openAfterRename: settings.openCreatedFiles,
+                                                           applicationPath: saved.applicationPath)).perform()
+
+        case .copyHash(let name, let items):
+            guard let algorithm = FileHash(rawValue: name) else { throw FileActionError.unavailableMenuAction }
+            let text = try await Task.detached(priority: .userInitiated) {
+                let access = try StoreSandbox.startAccess(to: items, folders: settings.authorizedFolders)
+                defer { access.forEach { $0.stopAccessingSecurityScopedResource() } }
+                return try algorithm.clipboardText(for: items)
+            }.value
+            try Task.checkCancellation()
+            if NSPasteboard.general.changeCount == request.clipboardChangeCount { try FinderClipboard.writeText(text) }
+
+        case .open(let items, let application):
+            guard application.isFileURL, InstalledApplications.identifier(at: application) != nil
+            else { throw FileActionError.launchFailed }
+            let access = try StoreSandbox.startAccess(to: items, folders: settings.authorizedFolders)
+            defer { access.forEach { $0.stopAccessingSecurityScopedResource() } }
+            _ = try await NSWorkspace.shared.open(items, withApplicationAt: application, configuration: .init())
         }
     }
 

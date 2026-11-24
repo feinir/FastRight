@@ -26,9 +26,13 @@ final class FastRightFinderSync: FIFinderSync {
 
     override init() {
         super.init()
-        controller.directoryURLs = FinderScope.baseRoots
+        if !StoreSandbox.isEnabled { controller.directoryURLs = FinderScope.baseRoots }
         refreshMonitoredRoots()
         _ = menus
+        if StoreSandbox.isEnabled {
+            DistributedNotificationCenter.default().addObserver(self, selector: #selector(settingsDidSave),
+                                                                 name: Settings.didSaveNotification, object: nil)
+        }
         let center = NSWorkspace.shared.notificationCenter
         volumeObservers = [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification].map { name in
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -39,7 +43,7 @@ final class FastRightFinderSync: FIFinderSync {
 
     override func beginObservingDirectory(at url: URL) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.requestedCutShortcut else { return }
+            guard !StoreSandbox.isEnabled, let self, !self.requestedCutShortcut else { return }
             self.requestedCutShortcut = true
             do {
                 try self.sendRequest(FinderRequest(action: .startCutShortcut, path: "/")) { [weak self] _ in
@@ -52,13 +56,29 @@ final class FastRightFinderSync: FIFinderSync {
     }
 
     deinit {
+        DistributedNotificationCenter.default().removeObserver(self)
         let center = NSWorkspace.shared.notificationCenter
         volumeObservers.forEach(center.removeObserver)
     }
 
+    @objc private func settingsDidSave() {
+        refreshMonitoredRoots()
+    }
+
     private func refreshMonitoredRoots() {
         preparationQueue.async { [weak self] in
-            let roots = FinderScope.monitoredRoots()
+            let roots: Set<URL>
+            if StoreSandbox.isEnabled {
+                let settings = (try? Settings.load()) ?? Settings()
+                roots = Set(settings.authorizedFolders.compactMap { folder in
+                    let url = URL(fileURLWithPath: folder.path, isDirectory: true)
+                    guard settings.externalVolumes || FinderScope.allows(url, externalVolumes: false, visibleMountRoots: nil)
+                    else { return nil }
+                    return url
+                })
+            } else {
+                roots = FinderScope.monitoredRoots()
+            }
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.controller.directoryURLs != roots else { return }
                 self.controller.directoryURLs = roots
