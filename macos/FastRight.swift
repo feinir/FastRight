@@ -484,6 +484,12 @@ private struct SettingsView: View {
                         }
                     }
                 }
+                if StoreSandbox.isEnabled,
+                   let privacyPolicy = URL(string: "https://github.com/feinir/FastRight/blob/main/PRIVACY.md") {
+                    Section {
+                        Link(strings("Privacy Policy"), destination: privacyPolicy)
+                    }
+                }
                 Section(strings("Permissions")) {
                     permissionRow(strings("Finder Extension"), detail: strings("Show FastRight in the Finder context menu"),
                                   ready: model.permissions.finderExtension,

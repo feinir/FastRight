@@ -29,6 +29,8 @@ app="$work/build/FastRight.app"
 finder="$app/Contents/PlugIns/FastRightFinder.appex"
 cp macos/AppStore.entitlements "$work/App.entitlements"
 cp macos/FinderAppStore.entitlements "$work/Finder.entitlements"
+cp macos/AppPrivacy.xcprivacy "$app/Contents/Resources/PrivacyInfo.xcprivacy"
+cp macos/FinderPrivacy.xcprivacy "$finder/Contents/Resources/PrivacyInfo.xcprivacy"
 
 if [[ "$mode" == preview ]]; then
     details="$(/usr/bin/codesign -dvv "$app" 2>&1)"

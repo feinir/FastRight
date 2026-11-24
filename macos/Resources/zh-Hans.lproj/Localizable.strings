@@ -175,6 +175,7 @@
 "FastRight is already pasting files." = "FastRight 正在粘贴文件。";
 "Keep Both" = "保留两者";
 "Paste files and resolve name conflicts" = "粘贴文件并处理同名冲突";
+"Privacy Policy" = "隐私政策";
 "Replace" = "覆盖";
 "Replace the existing item or keep both items." = "可以覆盖现有项目，或保留两个项目。";
 "The original item could not be restored. It is still available at %@." = "未能恢复原项目，仍可在 %@ 找到它。";
