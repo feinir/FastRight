@@ -1,0 +1,7 @@
+/.build/
+/Build
+/target/
+/dist/
+/.DS_Store
+/MECHANICS.md
+/mechanics.json

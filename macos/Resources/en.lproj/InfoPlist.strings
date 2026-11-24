@@ -1,0 +1,4 @@
+"NSRemovableVolumesUsageDescription" = "FastRight needs access to items on external drives to run actions selected in the Finder context menu.";
+"NSNetworkVolumesUsageDescription" = "FastRight needs access to items on network drives to run actions selected in the Finder context menu.";
+"NSAppleEventsUsageDescription" = "FastRight needs to control Finder to open favorite folders in the current window.";
+"NSDesktopFolderUsageDescription" = "FastRight uses the Desktop folder for file actions selected from the menu bar.";

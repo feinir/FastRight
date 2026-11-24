@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleDisplayName</key><string>FastRight</string>
+    <key>CFBundleExecutable</key><string>fastright</string>
+    <key>CFBundleIconFile</key><string>FastRight</string>
+    <key>CFBundleIdentifier</key><string>com.ynpe.fastright</string>
+    <key>CFBundleName</key><string>FastRight</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>1.0</string>
+    <key>CFBundleVersion</key><string>27</string>
+    <key>LSMinimumSystemVersion</key><string>13.0</string>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key><string>FastRight Finder Request</string>
+            <key>CFBundleTypeExtensions</key><array><string>fastright-request</string></array>
+            <key>CFBundleTypeRole</key><string>Viewer</string>
+            <key>LSHandlerRank</key><string>None</string>
+        </dict>
+    </array>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>FastRight needs access to items on external drives to run actions selected in the Finder context menu.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>FastRight needs access to items on network drives to run actions selected in the Finder context menu.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>FastRight needs to control Finder to open favorite folders in the current window.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>FastRight uses the Desktop folder for file actions selected from the menu bar.</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key><string>com.ynpe.fastright.settings-row</string>
+            <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+        </dict>
+    </array>
+</dict>
+</plist>

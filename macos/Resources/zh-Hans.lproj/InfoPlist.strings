@@ -1,0 +1,4 @@
+"NSRemovableVolumesUsageDescription" = "FastRight 需要访问外置磁盘上的项目，才能执行你在访达右键菜单中选择的操作。";
+"NSNetworkVolumesUsageDescription" = "FastRight 需要访问网络磁盘上的项目，才能执行你在访达右键菜单中选择的操作。";
+"NSAppleEventsUsageDescription" = "FastRight 需要控制访达，才能在当前窗口直接切换到你选择的常用目录。";
+"NSDesktopFolderUsageDescription" = "FastRight 使用桌面目录执行你从菜单栏选择的文件操作。";
