@@ -896,6 +896,11 @@ private final class FastRightApplication: NSObject, NSApplicationDelegate, NSWin
             let access = try StoreSandbox.startAccess(to: items, folders: settings.authorizedFolders)
             defer { access.forEach { $0.stopAccessingSecurityScopedResource() } }
             _ = try await NSWorkspace.shared.open(items, withApplicationAt: application, configuration: .init())
+
+        case .betterZip(let operation, let items, let preset):
+            let access = try StoreSandbox.startAccess(to: items, folders: settings.authorizedFolders)
+            defer { access.forEach { $0.stopAccessingSecurityScopedResource() } }
+            try await operation.handOff(items, preset: preset)
         }
     }
 

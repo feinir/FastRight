@@ -14,7 +14,7 @@ FastRight 为 macOS 访达提供可自定义的右键菜单，并可把常用操
 
 ## 安装
 
-需要 Apple Silicon Mac 和 macOS 13 或更高版本。从 [GitHub Releases](https://github.com/feinir/FastRight/releases) 下载 `FastRight-1.0-arm64.dmg`，将 FastRight 拖入「应用程序」，打开后按「通用偏好」中的提示启用访达扩展。访达内联重命名、剪切快捷键和原生粘贴需要辅助功能权限。在当前访达窗口切换目录时需要允许 FastRight 控制访达。
+需要 Apple Silicon Mac 和 macOS 13 或更高版本。从 [GitHub Releases](https://github.com/feinir/FastRight/releases/latest) 下载最新版的 Apple Silicon DMG，将 FastRight 拖入「应用程序」，打开后按「通用偏好」中的提示启用访达扩展。访达内联重命名、剪切快捷键和原生粘贴需要辅助功能权限。在当前访达窗口切换目录时需要允许 FastRight 控制访达。
 
 ## 构建
 

@@ -63,6 +63,13 @@
 "Favorite Apps" = "Favorite Apps";
 "Favorite Folders" = "Favorite Folders";
 "File Hash" = "File Hash";
+"Compress with BetterZip" = "Compress with BetterZip";
+"Extract with BetterZip" = "Extract with BetterZip";
+"Default BetterZip Preset" = "Default Preset";
+"Compress selected items using BetterZip’s default preset" = "Compress selected items using BetterZip’s default preset";
+"Extract selected archives using BetterZip’s default preset" = "Extract selected archives using BetterZip’s default preset";
+"Could not find BetterZip." = "Could not find BetterZip.";
+"Could not send the selected items to BetterZip." = "Could not send the selected items to BetterZip.";
 "File Operations" = "File Operations";
 "File Templates" = "File Templates";
 "Finder Automation" = "Finder Automation";

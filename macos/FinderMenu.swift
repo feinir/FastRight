@@ -451,6 +451,35 @@ final class FastRightMenu: NSObject {
             try $0.open(items: items, application: application)
         }
         let canTransferSelection = menu != .contextualMenuForContainer && !items.contains(where: FinderScope.isVolumeRoot)
+        if !isMenuBar, menu == .contextualMenuForItems, !selectedItems.isEmpty, canTransferSelection,
+           isEnabled(.betterZipCompress) || isEnabled(.betterZipExtract), BetterZipOperation.applicationURL != nil {
+            let operation = BetterZipOperation.forSelection(selectedItems)
+            let action: FinderAction = operation == .extract ? .betterZipExtract : .betterZipCompress
+            if isEnabled(action) {
+                func handOff(preset: String?) -> MenuAction {
+                    { extensionInstance in
+                        if StoreSandbox.isEnabled {
+                            try extensionInstance.requestScopedOperation(
+                                .betterZip(operation, items: selectedItems, preset: preset), at: selectedItems[0]
+                            )
+                        } else {
+                            Task { @MainActor in
+                                do { try await operation.handOff(selectedItems, preset: preset) }
+                                catch { extensionInstance.showError(error.localizedDescription) }
+                            }
+                        }
+                    }
+                }
+                let presets = operation.presetNames
+                if presets.isEmpty {
+                    add(action, handOff(preset: nil))
+                } else {
+                    let defaults = command(strings("Default BetterZip Preset"), handOff(preset: nil))
+                    let items = presets.map { command($0, handOff(preset: $0)) }
+                    addCollection(action, items: [defaults, .separator()] + items)
+                }
+            }
+        }
         add(.copy, available: canTransferSelection) { try $0.copyItems(items, cut: false) }
         add(.cut, available: canTransferSelection) { try $0.copyItems(items, cut: true) }
         add(.paste, available: FinderClipboard.containsFiles(.general)) { try $0.paste(into: folder) }

@@ -63,6 +63,13 @@
 "Favorite Apps" = "常用程序";
 "Favorite Folders" = "常用目录";
 "File Hash" = "文件Hash";
+"Compress with BetterZip" = "BetterZip 压缩";
+"Extract with BetterZip" = "BetterZip 解压缩";
+"Default BetterZip Preset" = "默认预设";
+"Compress selected items using BetterZip’s default preset" = "使用 BetterZip 的默认压缩预设处理选中项目";
+"Extract selected archives using BetterZip’s default preset" = "使用 BetterZip 的默认解压预设处理选中的压缩包";
+"Could not find BetterZip." = "找不到 BetterZip。";
+"Could not send the selected items to BetterZip." = "无法将选中项目交给 BetterZip。";
 "File Operations" = "文件操作";
 "File Templates" = "文件模板";
 "Finder Automation" = "自动化访达";

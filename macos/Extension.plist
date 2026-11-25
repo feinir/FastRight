@@ -8,9 +8,10 @@
     <key>CFBundleIdentifier</key><string>com.ynpe.fastright.findersync</string>
     <key>CFBundleName</key><string>FastRight Finder</string>
     <key>CFBundlePackageType</key><string>XPC!</string>
-    <key>CFBundleShortVersionString</key><string>1.0</string>
-    <key>CFBundleVersion</key><string>27</string>
+    <key>CFBundleShortVersionString</key><string>1.2.1</string>
+    <key>CFBundleVersion</key><string>34</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
+    <key>LSUIElement</key><true/>
     <key>NSRemovableVolumesUsageDescription</key>
     <string>FastRight needs access to items on external drives to run actions selected in the Finder context menu.</string>
     <key>NSNetworkVolumesUsageDescription</key>

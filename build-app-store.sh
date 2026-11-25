@@ -27,6 +27,8 @@ esac
 
 app="$work/build/FastRight.app"
 finder="$app/Contents/PlugIns/FastRightFinder.appex"
+# Store builds monitor user-authorized folders, which can appear in Finder Favorites.
+/usr/bin/plutil -remove CFBundleIcons "$app/Contents/Info.plist"
 cp macos/AppStore.entitlements "$work/App.entitlements"
 cp macos/FinderAppStore.entitlements "$work/Finder.entitlements"
 cp macos/AppPrivacy.xcprivacy "$app/Contents/Resources/PrivacyInfo.xcprivacy"
@@ -69,11 +71,12 @@ else
         fi
         /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $application_id" "$entitlements"
         /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $team_id" "$entitlements"
-        cp "$profile" "$bundle/Contents/embedded.provisionprofile"
+        cp -X "$profile" "$bundle/Contents/embedded.provisionprofile"
     }
 
     embed_profile "$FASTRIGHT_STORE_APP_PROFILE" "$app" "$work/App.entitlements"
     embed_profile "$FASTRIGHT_STORE_FINDER_PROFILE" "$finder" "$work/Finder.entitlements"
+    /usr/bin/xattr -rd com.apple.quarantine "$app"
 fi
 
 for bundle in "$app" "$finder"; do

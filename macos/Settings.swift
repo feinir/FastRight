@@ -4,9 +4,11 @@ import Foundation
 
 enum FinderAction: String, CaseIterable {
     case newFile, favoriteApps, favoriteDirectories, folder, path, name, fileHash, copy, cut, paste, terminal, editFile
+    case betterZipCompress, betterZipExtract
 
     static let defaultOrder: [Self] = [
-        .newFile, .folder, .favoriteApps, .favoriteDirectories, .path, .name, .fileHash, .editFile, .copy, .cut, .paste, .terminal
+        .newFile, .folder, .favoriteApps, .favoriteDirectories, .path, .name, .fileHash, .editFile,
+        .copy, .cut, .paste, .terminal, .betterZipCompress, .betterZipExtract
     ]
 
     var symbol: String {
@@ -23,6 +25,8 @@ enum FinderAction: String, CaseIterable {
         case .paste: return "clipboard"
         case .terminal: return "terminal"
         case .editFile: return "square.and.pencil"
+        case .betterZipCompress: return "doc.zipper"
+        case .betterZipExtract: return "tray.and.arrow.down"
         }
     }
 
@@ -42,6 +46,8 @@ enum FinderAction: String, CaseIterable {
             return (strings("Paste"), strings(detail))
         case .terminal: return (strings("Open in Terminal"), strings("Open folders in the terminal selected in General settings"))
         case .editFile: return (strings("Edit File"), strings("Open selected files in the text editor selected in General settings"))
+        case .betterZipCompress: return (strings("Compress with BetterZip"), strings("Compress selected items using BetterZip’s default preset"))
+        case .betterZipExtract: return (strings("Extract with BetterZip"), strings("Extract selected archives using BetterZip’s default preset"))
         }
     }
 }
@@ -610,6 +616,10 @@ struct Settings: Codable, Equatable {
                 let index = actionOrder.firstIndex(of: hashAction).map { $0 + 1 } ?? actionOrder.endIndex
                 actionOrder.insert(editAction, at: index)
             }
+        }
+        for action in [FinderAction.betterZipCompress, .betterZipExtract] where savedOrder?.contains(action.rawValue) != true {
+            if !actionOrder.contains(action.rawValue) { actionOrder.append(action.rawValue) }
+            enabledActions.insert(action.rawValue)
         }
         menuGroups = try values.decodeIfPresent([FinderMenuGroup].self, forKey: .menuGroups) ?? menuGroups
         actionGroups = try values.decodeIfPresent([String: UUID].self, forKey: .actionGroups) ?? actionGroups

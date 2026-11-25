@@ -74,4 +74,5 @@ enum ScopedFileOperation: Codable {
     case createFile(templateID: UUID, inContainer: Bool)
     case copyHash(algorithm: String, items: [URL])
     case open(items: [URL], application: URL)
+    case betterZip(BetterZipOperation, items: [URL], preset: String?)
 }
