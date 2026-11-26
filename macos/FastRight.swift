@@ -716,7 +716,6 @@ private final class FastRightApplication: NSObject, NSApplicationDelegate, NSWin
     private var settingsModel: SettingsModel?
     private let screenshotURL: URL?
     private var launched = false
-    private var launchedForFinder = false
     private var pendingSettingsWindow = false
     private var mainMenuLanguage: AppLanguage?
     private let cutShortcut = FinderCutShortcut()
@@ -745,30 +744,32 @@ private final class FastRightApplication: NSObject, NSApplicationDelegate, NSWin
         let path = arguments.drop(while: { $0 != "--screenshot" }).dropFirst().first
         let delegate = FastRightApplication(screenshotURL: path.map { URL(fileURLWithPath: $0) })
         let app = NSApplication.shared
-        app.setActivationPolicy(path == nil ? .regular : .accessory)
+        app.setActivationPolicy(.accessory)
         app.delegate = delegate
         withExtendedLifetime(delegate) { app.run() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         launched = true
-        if screenshotURL == nil {
-            installMainMenu(strings: .current)
-            if !StoreSandbox.isEnabled { cutShortcut.start() }
-            statusItem.start()
-        }
-        if launchedForFinder {
-            NSApplication.shared.setActivationPolicy(.accessory)
-            handleFinderRequests()
-        } else {
+        if screenshotURL != nil {
             showSettings()
+            return
         }
+        installMainMenu(strings: .current)
+        if !StoreSandbox.isEnabled { cutShortcut.start() }
+        statusItem.start()
+        handleFinderRequests()
+    }
+
+    func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        // Launch Services sends this for a normal app open. Finder sends a request document.
+        requestSettingsWindow()
+        return true
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         let requests = urls.compactMap(FinderRequest.takeRequest(at:))
         guard !requests.isEmpty else { return }
-        launchedForFinder = true
         for request in requests {
             switch request.action {
             case .startCutShortcut: break
@@ -960,14 +961,22 @@ private final class FastRightApplication: NSObject, NSApplicationDelegate, NSWin
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        openSettingsWindow()
+        requestSettingsWindow()
         return true
     }
 
+    private func requestSettingsWindow() {
+        if launched { openSettingsWindow() }
+        else { pendingSettingsWindow = true }
+    }
+
     private func openSettingsWindow() {
-        if window == nil { showSettings() }
-        window?.deminiaturize(nil)
-        window?.makeKeyAndOrderFront(nil)
+        guard let window else {
+            showSettings()
+            return
+        }
+        window.deminiaturize(nil)
+        window.makeKeyAndOrderFront(nil)
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
 

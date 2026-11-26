@@ -123,7 +123,7 @@ final class FastRightFinderSync: FIFinderSync {
     private func sendRequest(_ request: FinderRequest, onFailure: @escaping (Error) -> Void) throws {
         let url = try request.writeRequest()
         let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = request.action == .openPreferences
+        configuration.activates = false
         // Finder Sync can open a document in the host, but Launch Services drops its command-line arguments.
         NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: configuration) { _, error in
             guard let error else { return }
